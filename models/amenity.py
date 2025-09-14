@@ -1,7 +1,10 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+"""Amenity model module."""
 
 from models.base_model import BaseModel
 
+
 class Amenity(BaseModel):
-    """Amenity class"""
+    """Amenity class inheriting from BaseModel."""
+
     name = ""

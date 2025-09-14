@@ -1,71 +1,63 @@
+#!/usr/bin/env python3
+"""
+Simple JSON FileStorage engine for alu-AirBnB_clone.
+"""
 import json
-from models.base_model import BaseModel
-from models.user import User
-from models.amenity import Amenity
-from models.city import City
-from models.review import Review
-from models.place import Place
-from models.review import Review
-from models.state import State
-import models
-import os
+from pathlib import Path
 
 
 class FileStorage:
-    """Serializes instances to
-    a JSON file and deserializes JSON file to instances.
-    """
+    """Serializes instances to JSON file and deserializes back."""
 
-    __file_path = "file.json"
+    __file_path = Path("file.json")
     __objects = {}
 
-    @property
-    def file_path(self):
-        """Getter for __file_path."""
-        return self.__file_path
-
-    @property
-    def objects(self):
-        """Getter for __objects."""
-        return self.__objects
-
     def all(self):
-        """Returns the dictionary __objects."""
-        return FileStorage.__objects
+        """Return the dictionary of all stored objects."""
+        return self.__class__.__objects
 
     def new(self, obj):
-        """Sets in __objects the obj with key <obj class name>.id."""
-        key = f"{obj.__class__.__name__}.{obj.id}"
-        FileStorage.__objects[key] = obj
+        """Add new object to storage with key <class name>.id."""
+        if obj is None:
+            return
+        key = "{}.{}".format(obj.__class__.__name__, obj.id)
+        self.__class__.__objects[key] = obj
 
     def save(self):
-        """Serializes __objects to the JSON file (path: __file_path)."""
-        with open(self.__file_path, 'w') as f:
-            json.dump({key: obj.to_dict()
-                       for key, obj in FileStorage.__objects.items()}, f)
-        # print(f"File saved to {self.__file_path}")
-        # print(f"File exists: {os.path.exists(self.__file_path)}")
+        """Serialize __objects to the JSON file."""
+        to_save = {}
+        for key, obj in self.__class__.__objects.items():
+            if hasattr(obj, "to_dict"):
+                to_save[key] = obj.to_dict()
+            else:
+                # fallback: try to serialize __dict__
+                to_save[key] = obj.__dict__
+        with self.__class__.__file_path.open("w", encoding="utf-8") as fh:
+            json.dump(to_save, fh, indent=2)
 
-    def reload(self):
-        """Deserializes the JSON file to __objects
-        (only if the JSON file (__file_path) exists)."""
+    def reload(self, cls_map=None):
+        """Deserialize the JSON file to __objects, if file exists.
+
+        cls_map: optional dict mapping class names to classes so we can
+                 recreate real objects.
+        """
+        if not self.__class__.__file_path.exists():
+            return
         try:
-            with open(self.__file_path, 'r') as f:
-                objects = json.load(f)
-                for key, value in objects.items():
-                    FileStorage.__objects[key] = \
-                        self.classes()[value["__class__"]](**value)
-        except FileNotFoundError:
-            pass
+            with self.__class__.__file_path.open("r", encoding="utf-8") as fh:
+                data = json.load(fh)
+        except json.JSONDecodeError:
+            return
 
-    def classes(self):
-        """Returns a dictionary of valid classes and their references."""
-        return {
-            "BaseModel": BaseModel,
-            "User": User,
-            "Amenity": Amenity,
-            "State": State,
-            "Review": Review,
-            "Place": Place,
-            "City": City,
-        }
+        if not isinstance(data, dict):
+            return
+
+        self.__class__.__objects = {}
+        for key, val in data.items():
+            class_name = val.get("__class__")
+            if cls_map and class_name in cls_map:
+                cls = cls_map[class_name]
+                self.__class__.__objects[key] = cls(**val)
+            else:
+                # Keep raw dict if class not available
+                self.__class__.__objects[key] = val
